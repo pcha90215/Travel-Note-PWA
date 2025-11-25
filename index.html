@@ -322,8 +322,9 @@
             <div style="margin-top: 10px;">
                 <label class="form-label" style="color:var(--primary);">🛫 出發 (代號/時區/時間)</label>
                 <div class="form-row">
+                    <!-- 下拉選單現在會透過 JS 自動產生所有時區 -->
                     <input type="text" class="form-input" id="depCode" placeholder="TPE" style="flex:1; text-transform:uppercase" oninput="autoUpdateTimezone('depCode', 'depZone')">
-                    <select id="depZone" class="zone-select" style="flex:1" onchange="calcDuration()"><option value="8">UTC+8</option><option value="9">UTC+9</option><option value="0">UTC+0</option></select>
+                    <select id="depZone" class="zone-select" style="flex:1" onchange="calcDuration()"></select>
                 </div>
                 <input type="time" class="form-input" id="depTime" style="margin-top:5px;" onchange="calcDuration()">
             </div>
@@ -332,7 +333,7 @@
                 <label class="form-label" style="color:var(--secondary);">🛬 抵達 (代號/時區/時間)</label>
                 <div class="form-row">
                     <input type="text" class="form-input" id="arrCode" placeholder="NRT" style="flex:1; text-transform:uppercase" oninput="autoUpdateTimezone('arrCode', 'arrZone')">
-                    <select id="arrZone" class="zone-select" style="flex:1" onchange="calcDuration()"><option value="9">UTC+9</option><option value="8">UTC+8</option></select>
+                    <select id="arrZone" class="zone-select" style="flex:1" onchange="calcDuration()"></select>
                 </div>
                 <input type="time" class="form-input" id="arrTime" style="margin-top:5px;" onchange="calcDuration()">
             </div>
@@ -410,7 +411,49 @@
     let isShowingOverallTotal = false;
     let lastUpdateStr = localStorage.getItem('lastRateUpdate_Edit') || '尚未更新'; 
 
-    const airportTimezones = { "NRT": 9, "TPE": 8, "KIX": 9, "HKG": 8, "LAX": -8, "CDG": 1 };
+    // --- 完整機場時區表 (Standard Time) ---
+    // 如遇日光節約時間(DST)，請使用者手動 +/- 1
+    const airportTimezones = {
+        // Asia (UTC+7, +8, +9)
+        "TPE": 8, "TSA": 8, "KHH": 8, "RMQ": 8,
+        "NRT": 9, "HND": 9, "KIX": 9, "FUK": 9, "OKA": 9, "CTS": 9, "NGO": 9, "SDJ": 9,
+        "ICN": 9, "GMP": 9, "PUS": 9, "CJU": 9,
+        "HKG": 8, "MFM": 8, "PEK": 8, "PVG": 8, "SHA": 8, "CAN": 8,
+        "SIN": 8, "KUL": 8, "MNL": 8, "CEB": 8, "DPS": 8,
+        "BKK": 7, "DMK": 7, "SGN": 7, "HAN": 7, "HKT": 7, "PQC": 7,
+        
+        // Europe (UTC+0, +1, +2 - Standard)
+        "LHR": 0, "LGW": 0, "MAN": 0, "EDI": 0, "LIS": 0,
+        "CDG": 1, "ORY": 1, "AMS": 1, "FRA": 1, "MUC": 1, "BER": 1, 
+        "FCO": 1, "MXP": 1, "VCE": 1, "MAD": 1, "BCN": 1, "ZRH": 1, 
+        "GVA": 1, "VIE": 1, "PRG": 1, "BUD": 1, "CPH": 1, "ARN": 1, "OSL": 1,
+        "ATH": 2, "HEL": 2, "IST": 3, "DXB": 4, "DOH": 3,
+        
+        // Americas (UTC-5 to -10 - Standard)
+        "JFK": -5, "EWR": -5, "LGA": -5, "BOS": -5, "IAD": -5, "DCA": -5, "YYZ": -5, "YUL": -5,
+        "ORD": -6, "DFW": -6, "IAH": -6, "ATL": -5, "MIA": -5, "MCO": -5,
+        "DEN": -7, "YYC": -7,
+        "LAX": -8, "SFO": -8, "SEA": -8, "LAS": -8, "YVR": -8,
+        "HNL": -10,
+        
+        // Oceania
+        "SYD": 10, "MEL": 10, "BNE": 10, "AKL": 12
+    };
+
+    // --- 動態生成時區下拉選單 ---
+    function initTimezoneSelects() {
+        const selects = [document.getElementById('depZone'), document.getElementById('arrZone')];
+        let optionsHTML = "";
+        
+        // 產生從 UTC-12 到 UTC+14 的選項
+        for(let i = -12; i <= 14; i++) {
+            const label = i >= 0 ? `+${i}` : `${i}`;
+            // 預設選取 UTC+8 和 UTC+9 只是初始值，會被 openModal 覆蓋
+            optionsHTML += `<option value="${i}">UTC${label}</option>`;
+        }
+        
+        selects.forEach(s => s.innerHTML = optionsHTML);
+    }
 
     // --- 匯率自動更新邏輯 ---
     async function fetchExchangeData() {
@@ -740,8 +783,11 @@
         document.getElementById('inputTime').value = '09:00';
         document.getElementById('inputType').value = 'spot';
         document.getElementById('inputCurrency').value = 'TWD';
-        document.getElementById('depZone').value = 8; document.getElementById('arrZone').value = 9;
         document.getElementById('durationDisplay').innerText = '';
+
+        // 預設時區 (若沒有值則預設 UTC+8 和 UTC+9)
+        document.getElementById('depZone').value = 8; 
+        document.getElementById('arrZone').value = 9;
 
         if(id) {
             const item = days[currentDay].find(i=>i.id===id);
@@ -757,8 +803,8 @@
                     document.getElementById('arrCode').value = item.arrCode || '';
                     document.getElementById('depTime').value = item.depTime || '09:00';
                     document.getElementById('arrTime').value = item.arrTime || '10:00';
-                    document.getElementById('depZone').value = item.depZone || 8;
-                    document.getElementById('arrZone').value = item.arrZone || 9;
+                    document.getElementById('depZone').value = item.depZone !== undefined ? item.depZone : 8;
+                    document.getElementById('arrZone').value = item.arrZone !== undefined ? item.arrZone : 9;
                     calcDuration();
                 } else if (item.type === 'transport') {
                     document.getElementById('transportMode').value = item.transportMode || '';
@@ -808,7 +854,10 @@
 
     function autoUpdateTimezone(codeId, zoneId) {
         const c = document.getElementById(codeId).value.toUpperCase();
-        if(airportTimezones[c]) { document.getElementById(zoneId).value = airportTimezones[c]; calcDuration(); }
+        if(airportTimezones[c] !== undefined) { 
+            document.getElementById(zoneId).value = airportTimezones[c]; 
+            calcDuration(); 
+        }
     }
     
     // Save/Data Utils
@@ -852,6 +901,7 @@
 
     // Init
     document.addEventListener('DOMContentLoaded', () => {
+        initTimezoneSelects(); // 這一行是新增的，用來產生下拉選單選項
         renderUI();
         initAutoUpdate(); 
     });
