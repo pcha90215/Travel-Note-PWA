@@ -1,10 +1,11 @@
-const CACHE_NAME = 'travel-note-v3';
+const CACHE_NAME = 'travel-note-v2';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './manifest.json',
     './icon-192.png',
     './icon-512.png',
+    // 匯出 Excel 所需的函式庫
     'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js'
 ];
 

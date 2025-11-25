@@ -323,7 +323,7 @@
                 <label class="form-label" style="color:var(--primary);">🛫 出發 (代號/時區/時間)</label>
                 <div class="form-row">
                     <input type="text" class="form-input" id="depCode" placeholder="TPE" style="flex:1; text-transform:uppercase" oninput="autoUpdateTimezone('depCode', 'depZone')">
-                    <select id="depZone" class="zone-select" style="flex:1" onchange="calcDuration()"></select>
+                    <select id="depZone" class="zone-select" style="flex:1" onchange="calcDuration()"><option value="8">UTC+8</option><option value="9">UTC+9</option><option value="0">UTC+0</option></select>
                 </div>
                 <input type="time" class="form-input" id="depTime" style="margin-top:5px;" onchange="calcDuration()">
             </div>
@@ -332,7 +332,7 @@
                 <label class="form-label" style="color:var(--secondary);">🛬 抵達 (代號/時區/時間)</label>
                 <div class="form-row">
                     <input type="text" class="form-input" id="arrCode" placeholder="NRT" style="flex:1; text-transform:uppercase" oninput="autoUpdateTimezone('arrCode', 'arrZone')">
-                    <select id="arrZone" class="zone-select" style="flex:1" onchange="calcDuration()"></select>
+                    <select id="arrZone" class="zone-select" style="flex:1" onchange="calcDuration()"><option value="9">UTC+9</option><option value="8">UTC+8</option></select>
                 </div>
                 <input type="time" class="form-input" id="arrTime" style="margin-top:5px;" onchange="calcDuration()">
             </div>
@@ -410,24 +410,451 @@
     let isShowingOverallTotal = false;
     let lastUpdateStr = localStorage.getItem('lastRateUpdate_Edit') || '尚未更新'; 
 
-    // --- 完整機場時區表 (Standard Time) ---
-    // 如遇日光節約時間(DST)，請使用者手動 +/- 1
-    const airportTimezones = {
-        // Asia (UTC+7, +8, +9)
-        "TPE": 8, "TSA": 8, "KHH": 8, "RMQ": 8,
-        "NRT": 9, "HND": 9, "KIX": 9, "FUK": 9, "OKA": 9, "CTS": 9, "NGO": 9, "SDJ": 9,
-        "ICN": 9, "GMP": 9, "PUS": 9, "CJU": 9,
-        "HKG": 8, "MFM": 8, "PEK": 8, "PVG": 8, "SHA": 8, "CAN": 8,
-        "SIN": 8, "KUL": 8, "MNL": 8, "CEB": 8, "DPS": 8,
-        "BKK": 7, "DMK": 7, "SGN": 7, "HAN": 7, "HKT": 7, "PQC": 7,
+    const airportTimezones = { "NRT": 9, "TPE": 8, "KIX": 9, "HKG": 8, "LAX": -8, "CDG": 1 };
+
+    // --- 匯率自動更新邏輯 ---
+    async function fetchExchangeData() {
+        try {
+            const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+            if(!res.ok) throw new Error();
+            const data = await res.json();
+            console.log('Update Source: ExchangeRate-API');
+            return { source: 'Global API', rates: data.rates };
+        } catch(e) { console.warn("Primary API failed, trying backup..."); }
+
+        try {
+            const res = await fetch('https://open.er-api.com/v6/latest/USD');
+            if(!res.ok) throw new Error();
+            const data = await res.json();
+            console.log('Update Source: OpenER');
+            return { source: 'Global (Backup)', rates: data.rates };
+        } catch(e) { return null; }
+    }
+
+    async function autoUpdateRates(silent = false) {
+        if(!settings.rates['TWD']) settings.rates['TWD'] = 1.0; 
+        if(!silent) showToast("🔄 正在更新匯率...");
         
-        // Europe (UTC+0, +1, +2 - Standard)
-        "LHR": 0, "LGW": 0, "MAN": 0, "EDI": 0, "LIS": 0,
-        "CDG": 1, "ORY": 1, "AMS": 1, "FRA": 1, "MUC": 1, "BER": 1, 
-        "FCO": 1, "MXP": 1, "VCE": 1, "MAD": 1, "BCN": 1, "ZRH": 1, 
-        "GVA": 1, "VIE": 1, "PRG": 1, "BUD": 1, "CPH": 1, "ARN": 1, "OSL": 1,
-        "ATH": 2, "HEL": 2, "IST": 3, "DXB": 4, "DOH": 3,
+        const result = await fetchExchangeData();
+        if(!result) { if(!silent) showToast("⚠️ 離線模式：無法更新匯率"); return; }
         
-        // Americas (UTC-5 to -10 - Standard)
-        "JFK": -5, "EWR": -5, "LGA": -5, "BOS": -5, "IAD": -5, "DCA": -5, "YYZ": -5, "YUL": -5,
-        "ORD": -6, "DFW": -6, "IAH
+        const { source, rates } = result; 
+        const usdToTwd = rates['TWD']; 
+
+        if(!usdToTwd) return;
+
+        let updated = false;
+        Object.keys(settings.rates).forEach(code => {
+            if(code === 'TWD') return;
+            const usdToTarget = rates[code]; 
+            if(usdToTarget > 0) {
+                const rate = (usdToTwd / usdToTarget) * 1.015; 
+                settings.rates[code] = rate;
+                updated = true;
+            }
+        });
+
+        if(updated) {
+            const now = new Date();
+            lastUpdateStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+            localStorage.setItem('tripSettings_Edit', JSON.stringify(settings));
+            localStorage.setItem('lastRateUpdate_Edit', lastUpdateStr);
+            renderRateBar();
+            if(!silent) showToast(`✅ 更新成功 (${source})`);
+        }
+    }
+
+    function initAutoUpdate() {
+        if(navigator.onLine) { autoUpdateRates(true); }
+        setInterval(() => { if(navigator.onLine) autoUpdateRates(true); }, 600000); 
+    }
+
+    async function fetchRateManual() {
+        if(!navigator.onLine) { showToast("❌ 無網路連線"); return; }
+        const code = document.getElementById('currencyCode').value.toUpperCase();
+        if(code.length!==3) { alert("請輸入3碼代號"); return; }
+        showToast("⏳ 抓取中...");
+        
+        const result = await fetchExchangeData();
+        if(result) {
+            const { rates } = result;
+            const usdToTwd = rates['TWD'];
+            const usdToTarget = rates[code];
+
+            if(usdToTarget > 0 && usdToTwd > 0) {
+                const rate = (usdToTwd / usdToTarget) * 1.015;
+                document.getElementById('exchangeRate').value = rate.toFixed(4);
+                showToast("✅ 抓取成功");
+            } else { showToast("❌ 無此貨幣資料"); }
+        } else { showToast("❌ 連線失敗"); }
+    }
+
+    // --- Excel Export Logic ---
+    function exportToExcel() {
+        if (!confirm("確定要匯出行程表為 Excel 嗎？")) return;
+
+        // 1. 準備 Excel 的標題列
+        const header = ["Day", "時間", "類型", "項目名稱", "詳細資訊/地點", "原始金額", "幣別", "匯率", "台幣(預估)", "備註"];
+        const data = [header];
+
+        // 2. 遍歷每一天的資料
+        const sortedDays = Object.keys(days).map(Number).sort((a,b)=>a-b);
+        
+        sortedDays.forEach(dayNum => {
+            const items = days[dayNum];
+            if (!items || items.length === 0) return;
+
+            // 依時間排序
+            items.sort((a,b) => (a.time||a.depTime||'00:00').localeCompare(b.time||b.depTime||'00:00'));
+
+            items.forEach(item => {
+                let details = "";
+                let timeStr = item.time || "";
+
+                if (item.type === 'flight') {
+                    timeStr = `${item.depTime} - ${item.arrTime}`;
+                    details = `航班: ${item.flightCode || '-'} | ${item.depCode} -> ${item.arrCode}`;
+                } else if (item.type === 'transport') {
+                    timeStr = `${item.depTime} - ${item.arrTime}`;
+                    details = `${item.transportMode || '交通'} | ${item.transportDepLoc} -> ${item.transportArrLoc}`;
+                } else {
+                    details = item.loc || "";
+                }
+
+                const currency = item.currency || 'TWD';
+                const rate = settings.rates[currency] || 1;
+                const cost = item.cost || 0;
+                const costTWD = Math.round(cost * rate);
+
+                const typeNameMap = { 'spot':'景點', 'food':'美食', 'transport':'交通', 'shopping':'購物', 'flight':'航班' };
+                const typeName = typeNameMap[item.type] || item.type;
+
+                data.push([
+                    `Day ${dayNum}`,
+                    timeStr,
+                    typeName,
+                    item.title || item.flightCode || item.transportMode || '',
+                    details,
+                    cost > 0 ? cost : '',
+                    cost > 0 ? currency : '',
+                    cost > 0 && currency !== 'TWD' ? rate.toFixed(3) : '',
+                    cost > 0 ? costTWD : '',
+                    item.notes || ''
+                ]);
+            });
+        });
+
+        // 3. 建立 Worksheet
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        ws['!cols'] = [
+            { wch: 6 }, { wch: 12 }, { wch: 6 }, { wch: 20 }, { wch: 30 },
+            { wch: 10 }, { wch: 6 }, { wch: 8 }, { wch: 10 }, { wch: 30 }
+        ];
+
+        // 4. 建立 Workbook
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "行程明細");
+
+        // 如果有打包清單，也加一個分頁
+        if (settings.packingList && settings.packingList.length > 0) {
+            const packData = [["狀態", "物品名稱"]];
+            settings.packingList.forEach(p => {
+                packData.push([p.chk ? "已帶" : "未帶", p.n]);
+            });
+            const wsPack = XLSX.utils.aoa_to_sheet(packData);
+            XLSX.utils.book_append_sheet(wb, wsPack, "打包清單");
+        }
+
+        // 5. 匯出
+        const fileName = `${settings.tripName || 'Travel_Note'}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    }
+
+    // --- Rendering Logic ---
+    function renderUI() {
+        document.getElementById('headerTitle').innerText = (settings.tripName || 'TRAVEL NOTE') + ' ✎';
+        document.getElementById('overallTotalCost').innerText = `總計: TWD ${calcTotal()}`;
+        renderRateBar();
+        renderTabs();
+        renderTimeline();
+    }
+
+    function renderRateBar() {
+        const keys = Object.keys(settings.rates).filter(k=>k!=='TWD');
+        const rateStr = keys.length ? keys.map(k=>`1${k}≈${settings.rates[k].toFixed(2)}`).join(' | ') : '設定匯率';
+        document.getElementById('rateText').innerHTML = `<div style="font-weight:700">${rateStr}</div><div style="font-size:0.75rem; color:#666; margin-top:3px;">來源: Global API (含1.5%緩衝) | 更新: ${lastUpdateStr}</div>`;
+    }
+
+    function renderTimeline() {
+        const container = document.getElementById('timelineContainer');
+        container.innerHTML = '';
+        document.getElementById('currentDayNum').innerText = currentDay;
+        
+        if (settings.startDate) {
+            const d = new Date(settings.startDate);
+            d.setDate(d.getDate() + currentDay - 1);
+            document.getElementById('dateDisplayInSummary').innerText = `(${d.getMonth()+1}/${d.getDate()})`;
+        }
+
+        const items = days[currentDay] || [];
+        let dayTotal = 0;
+        items.forEach(i => dayTotal += (i.cost||0) * (settings.rates[i.currency||'TWD']||1));
+        document.getElementById('dayTotal').innerText = isShowingOverallTotal ? `TWD ${calcTotal()}` : `TWD ${Math.round(dayTotal).toLocaleString()}`;
+        document.getElementById('dayTotalConverted').innerText = isShowingOverallTotal ? '切換回單日' : '總花費';
+
+        items.sort((a,b) => (a.time||a.depTime||'00:00').localeCompare(b.time||b.depTime||'00:00'));
+
+        if(items.length===0) { container.innerHTML='<div style="text-align:center;color:#ccc;margin-top:50px;">點擊 + 新增行程</div>'; return; }
+
+        items.forEach(item => {
+            const html = getCardHTML(item);
+            const div = document.createElement('div');
+            div.className = 'timeline-item';
+            div.innerHTML = html;
+            container.appendChild(div);
+        });
+    }
+
+    function getCardHTML(item) {
+        let timeDisplay = item.time || item.depTime || '';
+        let timeSub = '';
+        if(item.type === 'flight') timeSub = '起飛';
+        if(item.type === 'transport') timeSub = '出發';
+        const timeCol = timeDisplay ? `${timeDisplay}<span>${timeSub}</span>` : '全日';
+
+        let costHTML = '';
+        if (item.cost > 0) {
+            const rate = settings.rates[item.currency||'TWD'] || 1;
+            const twd = Math.round(item.cost * rate).toLocaleString();
+            costHTML = `<div class="card-cost"><span>${item.currency} ${item.cost.toLocaleString()}</span><span style="font-size:0.8em;color:#999;">≈ TWD ${twd}</span></div>`;
+        }
+
+        const tagMap = { 'spot':'tag-spot', 'food':'tag-food', 'transport':'tag-transport', 'shopping':'tag-shopping', 'flight':'tag-flight' };
+        const tagName = { 'spot':'景點', 'food':'美食', 'transport':'交通', 'shopping':'購物', 'flight':'航班' };
+        const tagHTML = `<span class="card-type-label ${tagMap[item.type]||''}">${tagName[item.type]||'活動'}</span>`;
+
+        let contentHTML = '';
+        let title = item.title; 
+
+        if (item.type === 'flight') {
+            title = item.title || item.flightCode || '航班行程';
+            contentHTML += `
+                <div class="flight-grid">
+                    <div class="flight-icon">✈️</div><div class="flight-info-text" style="font-weight:bold;">${item.flightCode || '航班'}</div>
+                    <div class="flight-icon">🛫</div><div class="flight-info-text">${item.depTime} <span class="flight-time-sub">${item.depCode} (UTC+${item.depZone})</span></div>
+                    <div class="flight-icon">🛬</div><div class="flight-info-text">${item.arrTime} <span class="flight-time-sub">${item.arrCode} (UTC+${item.arrZone})</span></div>
+                </div>`;
+        } else if (item.type === 'transport') {
+            title = item.title || item.transportMode || '交通行程';
+            contentHTML += `
+                <div class="transport-grid">
+                    <div class="transport-line"><div class="transport-dot"></div><div class="transport-bar"></div><div class="transport-dot" style="background:var(--border-color);"></div></div>
+                    <div>
+                        <div style="font-weight:bold; color:var(--text);">${item.transportMode || '交通'}</div>
+                        <div class="transport-detail" style="margin-top:4px; font-size:0.9rem;">${item.depTime} ${item.transportDepLoc||'起點'}</div>
+                        <div class="transport-detail" style="font-size:0.9rem;">${item.arrTime} ${item.transportArrLoc||'終點'}</div>
+                    </div>
+                </div>`;
+        } else {
+            if(item.loc) {
+                const isUrl = item.loc.startsWith('http');
+                const url = isUrl ? item.loc : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.loc)}`;
+                const locText = item.loc.length > 30 ? '地圖連結' : item.loc;
+                contentHTML += `<a href="${url}" target="_blank" class="card-loc">📍 ${locText}</a>`;
+            }
+        }
+        
+        if(item.notes) {
+            contentHTML += `<div style="font-size:0.85rem; color:#666; margin-top:8px; white-space: pre-wrap; padding-top:4px; border-top:1px dashed #eee;">${item.notes}</div>`;
+        }
+
+        return `
+            <div class="time-col">${timeCol}</div>
+            <div class="card type-${item.type}">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        ${tagHTML}
+                        <div class="card-title">${title}</div>
+                        ${item.type==='flight' && item.duration ? `<span style="font-size:0.75rem; color:var(--secondary);">⏳ ${item.duration}</span>` : ''}
+                    </div>
+                    <div class="card-actions"><button class="btn-icon" onclick="openModal(${item.id})">✎</button><button class="btn-icon" onclick="deleteItem(${item.id})">×</button></div>
+                </div>
+                ${contentHTML} ${costHTML}
+            </div>`;
+    }
+
+    // Actions
+    function saveItem() {
+        const type = document.getElementById('inputType').value;
+        const cost = parseFloat(document.getElementById('inputCost').value) || 0;
+        const currency = document.getElementById('inputCurrency').value;
+        const notes = document.getElementById('inputNotes').value.trim();
+        const inputTime = document.getElementById('inputTime').value;
+        
+        let newItem = {
+            id: editingItemId || Date.now(),
+            type, cost, currency, notes
+        };
+
+        if (type === 'flight') {
+            newItem.flightCode = document.getElementById('flightCode').value.toUpperCase().trim();
+            newItem.depCode = document.getElementById('depCode').value.toUpperCase().trim();
+            newItem.arrCode = document.getElementById('arrCode').value.toUpperCase().trim();
+            newItem.depTime = document.getElementById('depTime').value;
+            newItem.arrTime = document.getElementById('arrTime').value;
+            newItem.depZone = parseInt(document.getElementById('depZone').value);
+            newItem.arrZone = parseInt(document.getElementById('arrZone').value);
+            newItem.title = newItem.flightCode || `航班 ${newItem.depCode}➝${newItem.arrCode}`;
+            newItem.time = newItem.depTime;
+            newItem.duration = calculateDuration(newItem.depTime, newItem.arrTime, newItem.depZone, newItem.arrZone);
+            
+        } else if (type === 'transport') {
+            newItem.transportMode = document.getElementById('transportMode').value.trim();
+            newItem.depTime = document.getElementById('transportDepTime').value;
+            newItem.arrTime = document.getElementById('transportArrTime').value;
+            newItem.transportDepLoc = document.getElementById('transportDepLoc').value.trim();
+            newItem.transportArrLoc = document.getElementById('transportArrLoc').value.trim();
+            newItem.title = newItem.transportMode || '交通';
+            newItem.time = newItem.depTime;
+            
+        } else {
+            const title = document.getElementById('inputTitle').value.trim() || '未命名'; 
+            const loc = document.getElementById('inputLoc').value.trim();
+            newItem.title = title;
+            newItem.time = inputTime;
+            newItem.loc = loc;
+        }
+
+        if(editingItemId) {
+            const idx = days[currentDay].findIndex(i=>i.id===editingItemId);
+            if(idx!==-1) days[currentDay][idx] = newItem;
+        } else { days[currentDay].push(newItem); }
+        
+        saveData(); closeModal('itemModalOverlay'); renderUI();
+    }
+
+    // Modal Logic
+    function openModal(id) {
+        editingItemId = id; document.getElementById('itemModalOverlay').classList.add('open');
+        document.querySelectorAll('.form-input').forEach(e => e.value = '');
+        document.getElementById('inputTime').value = '09:00';
+        document.getElementById('inputType').value = 'spot';
+        document.getElementById('inputCurrency').value = 'TWD';
+        document.getElementById('depZone').value = 8; document.getElementById('arrZone').value = 9;
+        document.getElementById('durationDisplay').innerText = '';
+
+        if(id) {
+            const item = days[currentDay].find(i=>i.id===id);
+            if(item) {
+                document.getElementById('inputType').value = item.type;
+                document.getElementById('inputCurrency').value = item.currency || 'TWD';
+                document.getElementById('inputCost').value = item.cost || '';
+                document.getElementById('inputNotes').value = item.notes || '';
+                
+                if (item.type === 'flight') {
+                    document.getElementById('flightCode').value = item.flightCode || '';
+                    document.getElementById('depCode').value = item.depCode || '';
+                    document.getElementById('arrCode').value = item.arrCode || '';
+                    document.getElementById('depTime').value = item.depTime || '09:00';
+                    document.getElementById('arrTime').value = item.arrTime || '10:00';
+                    document.getElementById('depZone').value = item.depZone || 8;
+                    document.getElementById('arrZone').value = item.arrZone || 9;
+                    calcDuration();
+                } else if (item.type === 'transport') {
+                    document.getElementById('transportMode').value = item.transportMode || '';
+                    document.getElementById('transportDepTime').value = item.depTime || '09:00';
+                    document.getElementById('transportArrTime').value = item.arrTime || '10:00';
+                    document.getElementById('transportDepLoc').value = item.transportDepLoc || '';
+                    document.getElementById('transportArrLoc').value = item.transportArrLoc || '';
+                } else {
+                    document.getElementById('inputTitle').value = item.title || '';
+                    document.getElementById('inputTime').value = item.time || '09:00';
+                    document.getElementById('inputLoc').value = item.loc || '';
+                }
+            }
+        }
+        toggleFields();
+    }
+    
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); editingItemId=null; }
+    function deleteItem(id) { openConfirm('刪除此行程？', ()=>{ days[currentDay]=days[currentDay].filter(i=>i.id!==id); saveData(); renderUI(); }); }
+    function calcTotal() { let t=0; Object.values(days).flat().forEach(i=>t+=(i.cost||0)*(settings.rates[i.currency]||1)); return Math.round(t).toLocaleString(); }
+    function toggleTotalDisplay() { isShowingOverallTotal = !isShowingOverallTotal; renderTimeline(); }
+    
+    function toggleFields() {
+        const t = document.getElementById('inputType').value;
+        const isFlight = t==='flight', isTrans = t==='transport';
+        document.getElementById('normalFields').style.display = (isFlight||isTrans)?'none':'block';
+        document.getElementById('flightFields').className = isFlight?'input-panel show':'input-panel';
+        document.getElementById('transportFields').className = isTrans?'input-panel show':'input-panel';
+    }
+
+    function calcDuration() {
+        const dT=document.getElementById('depTime').value, aT=document.getElementById('arrTime').value;
+        const dZ=parseInt(document.getElementById('depZone').value), aZ=parseInt(document.getElementById('arrZone').value);
+        if(!dT || !aT) return;
+        document.getElementById('durationDisplay').innerText = `預估飛行: ${calculateDuration(dT,aT,dZ,aZ)}`;
+    }
+
+    function calculateDuration(depStr, arrStr, depZ, arrZ) {
+        let [dh, dm] = depStr.split(':').map(Number);
+        let [ah, am] = arrStr.split(':').map(Number);
+        let depMins = dh*60 + dm - (depZ*60);
+        let arrMins = ah*60 + am - (arrZ*60);
+        if (arrMins < depMins) arrMins += 24*60; 
+        let diff = arrMins - depMins;
+        return `${Math.floor(diff/60)}h ${diff%60}m`;
+    }
+
+    function autoUpdateTimezone(codeId, zoneId) {
+        const c = document.getElementById(codeId).value.toUpperCase();
+        if(airportTimezones[c]) { document.getElementById(zoneId).value = airportTimezones[c]; calcDuration(); }
+    }
+    
+    // Save/Data Utils
+    function saveData() { localStorage.setItem('tripData_Edit', JSON.stringify(days)); localStorage.setItem('tripSettings_Edit', JSON.stringify(settings)); }
+    function clearData() { openConfirm('清除所有資料？', ()=>{ localStorage.clear(); location.reload(); }); }
+    
+    function renderTabs() {
+        const c = document.getElementById('dayTabs'); c.innerHTML='';
+        const keys = Object.keys(days).map(Number).sort((a,b)=>a-b);
+        const max = keys.length?Math.max(...keys):1;
+        for(let i=1;i<=max;i++) {
+            const d=document.createElement('div'); d.className=`day-tab ${i===currentDay?'active':''}`; d.innerText=`Day ${i}`;
+            d.onclick=()=>{currentDay=i;isShowingOverallTotal=false;renderUI();}; c.appendChild(d);
+        }
+        const add=document.createElement('div'); add.className='day-tab'; add.innerText='+';
+        add.onclick=()=>{days[max+1]=[]; saveData(); currentDay=max+1; renderUI();}; c.appendChild(add);
+    }
+
+    // Modal Stubs
+    function openSettingsModal() { document.getElementById('settingsModalOverlay').classList.add('open'); document.getElementById('inputTripName').value=settings.tripName; document.getElementById('inputStartDate').value=settings.startDate; }
+    function saveSettings() { settings.tripName=document.getElementById('inputTripName').value; settings.startDate=document.getElementById('inputStartDate').value; saveData(); closeModal('settingsModalOverlay'); renderUI(); }
+    function openRateModal() { document.getElementById('rateModalOverlay').classList.add('open'); renderRateBarList(); }
+    function renderRateBarList() {
+        const c=document.getElementById('currentRatesList'); 
+        const html = Object.keys(settings.rates).map(k=>`<div><b>${k}</b>: ${settings.rates[k].toFixed(4)}</div>`).join('');
+        c.innerHTML = html || '無設定';
+    }
+    function saveRate() { settings.rates[document.getElementById('currencyCode').value.toUpperCase()] = parseFloat(document.getElementById('exchangeRate').value); saveData(); closeModal('rateModalOverlay'); renderUI(); }
+    function openPackingModal() { document.getElementById('packingModalOverlay').classList.add('open'); renderPacking(); }
+    function renderPacking() { 
+        const c=document.getElementById('packingListContainer'); c.innerHTML=''; 
+        settings.packingList.forEach((item,idx)=>{
+            const d=document.createElement('div'); d.style.padding='8px'; d.style.borderBottom='1px dashed #ddd';
+            d.innerHTML=`<input type="checkbox" ${item.chk?'checked':''} onchange="togglePack(${idx})"> ${item.n} <button onclick="delPack(${idx})" style="float:right;border:none;background:none;color:red;">×</button>`;
+            c.appendChild(d);
+        });
+    }
+    function addItemToPackingList() { settings.packingList.push({n:document.getElementById('newPackingItemName').value, chk:false}); document.getElementById('newPackingItemName').value=''; saveData(); renderPacking(); }
+    function togglePack(idx) { settings.packingList[idx].chk=!settings.packingList[idx].chk; saveData(); }
+    function delPack(idx) { settings.packingList.splice(idx,1); saveData(); renderPacking(); }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+        renderUI();
+        initAutoUpdate(); 
+    });
+</script>
+</body>
+</html>
