@@ -12,6 +12,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="icon-192.png">
 
+    <!-- 引入 Excel 處理套件 (SheetJS) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
     <style>
         /* --- 核心 UI 風格定義 (手繪筆記本風 - 還原版) --- */
         :root {
@@ -93,7 +96,7 @@
         .summary-amount { font-size: 1.8rem; font-weight: 800; color: var(--money); }
         .summary-title { font-size: 0.85rem; color: var(--gray); cursor: pointer; text-decoration: underline dotted; }
 
-        /* Timeline & Cards - 恢復原本的 Layout */
+        /* Timeline & Cards */
         .timeline-container {
             flex: 1; padding: 10px 25px 80px 25px; overflow-y: auto;
             max-width: 600px; margin: 0 auto; width: 100%; box-sizing: border-box;
@@ -101,7 +104,6 @@
         .timeline-item {
             display: flex; margin-bottom: 30px; position: relative; animation: slideUp 0.3s ease-out;
         }
-        /* 恢復原本的虛線樣式 */
         .timeline-item::before {
             content: ''; position: absolute; left: 35px; top: 30px; bottom: -30px; width: 1px; 
             background-image: linear-gradient(to top, var(--border-color) 50%, rgba(255, 255, 255, 0) 50%);
@@ -115,10 +117,8 @@
         }
         .time-col span { display: block; font-weight: normal; font-size: 0.75rem; color: var(--gray); margin-top: 2px; }
 
-        /* Card Style - 恢復原本的陰影與邊框 */
         .card {
             background: var(--card-bg); border-radius: 12px; padding: 18px; flex: 1;
-            /* 這是您喜歡的「厚度」陰影 */
             box-shadow: 4px 4px 0 var(--border-color), 0 2px 8px rgba(0,0,0,0.05); 
             position: relative; z-index: 1; border: 1px solid var(--border-color); 
             transition: transform 0.1s;
@@ -127,7 +127,6 @@
         .card-header { display: flex; justify-content: space-between; align-items: flex-start; }
         .card-title { font-weight: 700; font-size: 1.1rem; }
         
-        /* Tags */
         .card-type-label {
             font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 6px;
             margin-bottom: 5px; display: inline-block;
@@ -142,7 +141,6 @@
         .btn-icon { cursor: pointer; color: var(--gray); font-size: 1.1rem; border: none; background: none; padding: 0; }
         .btn-icon:hover { color: var(--money); }
 
-        /* Content Areas */
         .card-loc {
             font-size: 0.85rem; color: var(--primary); display: inline-flex; align-items: center; 
             gap: 4px; background: #F0F0F0; padding: 5px 10px; border-radius: 8px; 
@@ -150,7 +148,6 @@
             margin-top: 8px;
         }
 
-        /* 航班 Grid - 恢復原樣 */
         .flight-grid {
             display: grid; grid-template-columns: 20px 1fr; gap: 8px 10px;
             font-size: 0.9rem; align-items: center; margin-top: 8px;
@@ -159,7 +156,6 @@
         .flight-info-text { color: var(--text); }
         .flight-time-sub { font-size: 0.8rem; color: var(--gray); margin-left: 5px; }
 
-        /* 交通 Grid - 恢復原樣 */
         .transport-grid {
             display: grid; grid-template-columns: 20px 1fr; gap: 10px;
             margin-top: 8px; align-items: flex-start;
@@ -243,6 +239,7 @@
         <button class="total-cost-display" id="overallTotalCost" onclick="toggleTotalDisplay()">總計: TWD 0</button>
         <div class="action-btn" onclick="openSettingsModal()">🗓️ 設定</div>
         <div class="action-btn" onclick="openPackingModal()">🎒 清單</div>
+        <div class="action-btn" onclick="exportToExcel()">📥 匯出</div>
         <div class="action-btn" onclick="clearData()">🗑️ 重置</div>
     </div>
 </header>
@@ -280,7 +277,6 @@
     </div>
 </div>
 
-<!-- Modal 結構保持不變 -->
 <div class="modal-overlay" id="itemModalOverlay">
     <div class="modal">
         <h2 style="margin:0; color:var(--primary);" id="modalTitle">新增行程</h2>
@@ -419,7 +415,6 @@
     // --- 匯率自動更新邏輯 ---
     async function fetchExchangeData() {
         try {
-            // PWA Note: 若無網路，此 fetch 會失敗，直接跳到 catch
             const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
             if(!res.ok) throw new Error();
             const data = await res.json();
@@ -441,7 +436,6 @@
         if(!silent) showToast("🔄 正在更新匯率...");
         
         const result = await fetchExchangeData();
-        // 離線狀態下 result 為 null
         if(!result) { if(!silent) showToast("⚠️ 離線模式：無法更新匯率"); return; }
         
         const { source, rates } = result; 
@@ -493,6 +487,87 @@
                 showToast("✅ 抓取成功");
             } else { showToast("❌ 無此貨幣資料"); }
         } else { showToast("❌ 連線失敗"); }
+    }
+
+    // --- Excel Export Logic ---
+    function exportToExcel() {
+        if (!confirm("確定要匯出行程表為 Excel 嗎？")) return;
+
+        // 1. 準備 Excel 的標題列
+        const header = ["Day", "時間", "類型", "項目名稱", "詳細資訊/地點", "原始金額", "幣別", "匯率", "台幣(預估)", "備註"];
+        const data = [header];
+
+        // 2. 遍歷每一天的資料
+        const sortedDays = Object.keys(days).map(Number).sort((a,b)=>a-b);
+        
+        sortedDays.forEach(dayNum => {
+            const items = days[dayNum];
+            if (!items || items.length === 0) return;
+
+            // 依時間排序
+            items.sort((a,b) => (a.time||a.depTime||'00:00').localeCompare(b.time||b.depTime||'00:00'));
+
+            items.forEach(item => {
+                let details = "";
+                let timeStr = item.time || "";
+
+                if (item.type === 'flight') {
+                    timeStr = `${item.depTime} - ${item.arrTime}`;
+                    details = `航班: ${item.flightCode || '-'} | ${item.depCode} -> ${item.arrCode}`;
+                } else if (item.type === 'transport') {
+                    timeStr = `${item.depTime} - ${item.arrTime}`;
+                    details = `${item.transportMode || '交通'} | ${item.transportDepLoc} -> ${item.transportArrLoc}`;
+                } else {
+                    details = item.loc || "";
+                }
+
+                const currency = item.currency || 'TWD';
+                const rate = settings.rates[currency] || 1;
+                const cost = item.cost || 0;
+                const costTWD = Math.round(cost * rate);
+
+                const typeNameMap = { 'spot':'景點', 'food':'美食', 'transport':'交通', 'shopping':'購物', 'flight':'航班' };
+                const typeName = typeNameMap[item.type] || item.type;
+
+                data.push([
+                    `Day ${dayNum}`,
+                    timeStr,
+                    typeName,
+                    item.title || item.flightCode || item.transportMode || '',
+                    details,
+                    cost > 0 ? cost : '',
+                    cost > 0 ? currency : '',
+                    cost > 0 && currency !== 'TWD' ? rate.toFixed(3) : '',
+                    cost > 0 ? costTWD : '',
+                    item.notes || ''
+                ]);
+            });
+        });
+
+        // 3. 建立 Worksheet
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        ws['!cols'] = [
+            { wch: 6 }, { wch: 12 }, { wch: 6 }, { wch: 20 }, { wch: 30 },
+            { wch: 10 }, { wch: 6 }, { wch: 8 }, { wch: 10 }, { wch: 30 }
+        ];
+
+        // 4. 建立 Workbook
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "行程明細");
+
+        // 如果有打包清單，也加一個分頁
+        if (settings.packingList && settings.packingList.length > 0) {
+            const packData = [["狀態", "物品名稱"]];
+            settings.packingList.forEach(p => {
+                packData.push([p.chk ? "已帶" : "未帶", p.n]);
+            });
+            const wsPack = XLSX.utils.aoa_to_sheet(packData);
+            XLSX.utils.book_append_sheet(wb, wsPack, "打包清單");
+        }
+
+        // 5. 匯出
+        const fileName = `${settings.tripName || 'Travel_Note'}.xlsx`;
+        XLSX.writeFile(wb, fileName);
     }
 
     // --- Rendering Logic ---
@@ -589,7 +664,6 @@
             }
         }
         
-        // --- 備註修復 (Fix applied from previous step) ---
         if(item.notes) {
             contentHTML += `<div style="font-size:0.85rem; color:#666; margin-top:8px; white-space: pre-wrap; padding-top:4px; border-top:1px dashed #eee;">${item.notes}</div>`;
         }
