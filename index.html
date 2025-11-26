@@ -239,6 +239,7 @@
         <button class="total-cost-display" id="overallTotalCost" onclick="toggleTotalDisplay()">總計: TWD 0</button>
         <div class="action-btn" onclick="openSettingsModal()">🗓️ 設定</div>
         <div class="action-btn" onclick="openPackingModal()">🎒 清單</div>
+        <div class="action-btn" onclick="triggerImport()">📂 匯入</div>
         <div class="action-btn" onclick="exportToExcel()">📥 匯出</div>
         <div class="action-btn" onclick="clearData()">🗑️ 重置</div>
     </div>
@@ -265,6 +266,9 @@
 <div class="timeline-container" id="timelineContainer"></div>
 
 <button class="fab" onclick="openModal()">+</button>
+
+<!-- 隱藏的檔案輸入框 -->
+<input type="file" id="importFile" accept=".xlsx, .xls" style="display: none;" onchange="importFromExcel(event)">
 
 <div id="sys-toast">提示訊息</div>
 <div id="sys-confirm-overlay">
@@ -410,45 +414,36 @@
     let isShowingOverallTotal = false;
     let lastUpdateStr = localStorage.getItem('lastRateUpdate_Edit') || '尚未更新'; 
 
-    // --- 機場時區擴充表 (涵蓋: 台、日、韓、中港澳、東南亞、美、歐、紐澳) ---
+    // --- 機場時區擴充表 ---
     const airportTimezones = {
-        // 台灣 (UTC+8)
         "TPE": "+8", "TSA": "+8", "KHH": "+8", "RMQ": "+8",
-        // 日本 (UTC+9)
         "NRT": "+9", "HND": "+9", "KIX": "+9", "FUK": "+9", "CTS": "+9", "OKA": "+9", "NGO": "+9", "SDJ": "+9", "ISG": "+9",
-        // 韓國 (UTC+9)
         "ICN": "+9", "GMP": "+9", "PUS": "+9", "CJU": "+9",
-        // 港澳中國 (UTC+8)
         "HKG": "+8", "MFM": "+8", "PEK": "+8", "PVG": "+8", "SHA": "+8", "CAN": "+8",
-        // 東南亞
-        "BKK": "+7", "DMK": "+7", "CNX": "+7", // 泰國
-        "SIN": "+8", // 新加坡
-        "KUL": "+8", "BKI": "+8", "PEN": "+8", // 馬來西亞
-        "SGN": "+7", "HAN": "+7", "DAD": "+7", // 越南
-        "MNL": "+8", "CEB": "+8", // 菲律賓
-        "DPS": "+8", "CGK": "+7", // 印尼
-        // 美國
-        "LAX": "-8", "SFO": "-8", "SEA": "-8", "LAS": "-8", // 美西
-        "JFK": "-5", "EWR": "-5", "LGA": "-5", // 紐約
-        "ORD": "-6", "DFW": "-6", // 中部
-        "HNL": "-10", // 夏威夷
-        "GUM": "+10", // 關島
-        // 歐洲 (預設標準時區，夏令時間需手動調整)
-        "LHR": "+0", "LGW": "+0", // 英國
-        "CDG": "+1", "ORY": "+1", // 法國
-        "FRA": "+1", "MUC": "+1", "BER": "+1", // 德國
-        "FCO": "+1", "MXP": "+1", // 義大利
-        "AMS": "+1", // 荷蘭
-        "VIE": "+1", // 奧地利
-        "PRG": "+1", // 捷克
-        "BCN": "+1", "MAD": "+1", // 西班牙
-        "IST": "+3", // 土耳其
-        "ZRH": "+1", // 瑞士
-        // 紐澳
+        "BKK": "+7", "DMK": "+7", "CNX": "+7",
+        "SIN": "+8",
+        "KUL": "+8", "BKI": "+8", "PEN": "+8",
+        "SGN": "+7", "HAN": "+7", "DAD": "+7",
+        "MNL": "+8", "CEB": "+8",
+        "DPS": "+8", "CGK": "+7",
+        "LAX": "-8", "SFO": "-8", "SEA": "-8", "LAS": "-8",
+        "JFK": "-5", "EWR": "-5", "LGA": "-5",
+        "ORD": "-6", "DFW": "-6",
+        "HNL": "-10",
+        "GUM": "+10",
+        "LHR": "+0", "LGW": "+0",
+        "CDG": "+1", "ORY": "+1",
+        "FRA": "+1", "MUC": "+1", "BER": "+1",
+        "FCO": "+1", "MXP": "+1",
+        "AMS": "+1",
+        "VIE": "+1",
+        "PRG": "+1",
+        "BCN": "+1", "MAD": "+1",
+        "IST": "+3",
+        "ZRH": "+1",
         "SYD": "+10", "MEL": "+10", "BNE": "+10",
         "AKL": "+12", "CHC": "+12",
-        // 其他
-        "DXB": "+4" // 杜拜
+        "DXB": "+4"
     };
 
     // --- 匯率自動更新邏輯 ---
@@ -526,6 +521,111 @@
                 showToast("✅ 抓取成功");
             } else { showToast("❌ 無此貨幣資料"); }
         } else { showToast("❌ 連線失敗"); }
+    }
+
+    // --- Excel Import Logic ---
+    function triggerImport() {
+        document.getElementById('importFile').click();
+    }
+
+    function importFromExcel(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        openConfirm("匯入將會覆蓋目前的行程資料，確定要繼續嗎？", () => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+
+                    // 1. 讀取行程明細
+                    const sheetName = "行程明細";
+                    const worksheet = workbook.Sheets[sheetName];
+                    if (worksheet) {
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                        
+                        const newDays = {};
+                        
+                        jsonData.forEach(row => {
+                            // 解析 Day
+                            const dayStr = row["Day"] || "Day 1";
+                            const dayNum = parseInt(dayStr.replace("Day ", "")) || 1;
+
+                            if (!newDays[dayNum]) newDays[dayNum] = [];
+
+                            // 對應類型
+                            const typeMap = { '景點':'spot', '美食':'food', '交通':'transport', '購物':'shopping', '航班':'flight' };
+                            const type = typeMap[row["類型"]] || 'spot';
+
+                            // 解析時間 (若是 "09:00 - 10:00" 則分割)
+                            let time = row["時間"] || "";
+                            let depTime = time;
+                            let arrTime = "";
+                            if (time.includes("-")) {
+                                const parts = time.split("-").map(t => t.trim());
+                                depTime = parts[0];
+                                arrTime = parts[1];
+                            }
+
+                            const item = {
+                                id: Date.now() + Math.random(),
+                                type: type,
+                                title: row["項目名稱"] || "",
+                                cost: parseFloat(row["原始金額"]) || 0,
+                                currency: row["幣別"] || "TWD",
+                                notes: row["備註"] || ""
+                            };
+
+                            // 還原特殊欄位 (盡力還原，因為匯出時已格式化)
+                            if (type === 'flight') {
+                                item.depTime = depTime;
+                                item.arrTime = arrTime;
+                                item.flightCode = item.title;
+                                // 預設值，因為 Excel 沒存這麽細
+                                item.depCode = ""; item.arrCode = ""; 
+                                item.depZone = 8; item.arrZone = 8;
+                            } else if (type === 'transport') {
+                                item.depTime = depTime;
+                                item.arrTime = arrTime;
+                                item.transportMode = item.title;
+                                item.transportDepLoc = ""; // 無法從合併欄位精確還原
+                                item.transportArrLoc = "";
+                            } else {
+                                item.time = depTime;
+                                item.loc = row["詳細資訊/地點"] || "";
+                            }
+
+                            newDays[dayNum].push(item);
+                        });
+
+                        days = newDays;
+                    }
+
+                    // 2. 讀取打包清單 (如果存在)
+                    const packSheet = workbook.Sheets["打包清單"];
+                    if (packSheet) {
+                        const packData = XLSX.utils.sheet_to_json(packSheet);
+                        settings.packingList = packData.map(row => ({
+                            n: row["物品名稱"],
+                            chk: row["狀態"] === "已帶"
+                        }));
+                    }
+
+                    saveData();
+                    showToast("✅ 匯入成功！");
+                    setTimeout(() => location.reload(), 1000);
+
+                } catch (error) {
+                    console.error(error);
+                    showToast("❌ 匯入失敗，格式錯誤");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+        
+        // 重置 input 以便重複選取同一檔案
+        event.target.value = '';
     }
 
     // --- Excel Export Logic ---
