@@ -345,7 +345,20 @@
         <div style="margin-top:15px;">
             <label class="form-label">金額</label>
             <div class="form-row">
-                <select id="inputCurrency" class="currency-select" style="flex:1"><option value="TWD">TWD</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="KRW">KRW</option></select>
+                <select id="inputCurrency" class="currency-select" style="flex:1">
+                    <option value="TWD">TWD (新台幣)</option>
+                    <option value="JPY">JPY (日圓)</option>
+                    <option value="USD">USD (美元)</option>
+                    <option value="EUR">EUR (歐元)</option>
+                    <option value="KRW">KRW (韓元)</option>
+                    <option value="THB">THB (泰銖)</option>
+                    <option value="VND">VND (越南盾)</option>
+                    <option value="PHP">PHP (菲律賓比索)</option>
+                    <option value="NZD">NZD (紐西蘭元)</option>
+                    <option value="GBP">GBP (英鎊)</option>
+                    <option value="IDR">IDR (印尼盾)</option>
+                    <option value="CHF">CHF (瑞士法郎)</option>
+                </select>
                 <input type="number" class="form-input" id="inputCost" placeholder="0" style="flex:2;">
             </div>
         </div>
@@ -384,7 +397,7 @@
 
 <div class="modal-overlay" id="packingModalOverlay"><div class="modal"><h2>物品清單</h2><div class="form-row"><input type="text" id="newPackingItemName" class="form-input"><button class="btn btn-primary" onclick="addItemToPackingList()">新增</button></div><div id="packingListContainer" style="margin-top:15px;"></div><button class="btn btn-cancel" onclick="closeModal('packingModalOverlay')">關閉</button></div></div>
 
-<!-- 新增：資料匯入匯出 Modal -->
+<!-- 資料匯入匯出 Modal -->
 <div class="modal-overlay" id="dataModalOverlay">
     <div class="modal">
         <h2 style="color:var(--primary)">資料備份 / 還原</h2>
@@ -417,12 +430,23 @@
 
     // Data
     let days = JSON.parse(localStorage.getItem('tripData_Edit')) || { 1: [] };
+    
+    // 初始化設定，並確保新舊用戶都擁有完整的貨幣列表以便自動更新
     let settings = JSON.parse(localStorage.getItem('tripSettings_Edit')) || { 
         rates: { 'JPY': 0.21, 'USD': 30.5, 'EUR': 32.5, 'TWD': 1.0 }, 
         startDate: '',
         tripName: 'TRAVEL NOTE',
         packingList: [] 
     };
+
+    // 擴充：檢查並加入新支援的貨幣 (若舊資料中沒有)
+    const newCurrencies = { 
+        'THB': 0.9, 'VND': 0.0013, 'PHP': 0.56, 'NZD': 19.5, 'GBP': 40.5, 'IDR': 0.002, 'CHF': 35.5, 'KRW': 0.024 
+    };
+    Object.keys(newCurrencies).forEach(k => {
+        if (settings.rates[k] === undefined) settings.rates[k] = newCurrencies[k];
+    });
+
     let currentDay = 1;
     let editingItemId = null; 
     let isShowingOverallTotal = false;
@@ -733,8 +757,17 @@
     }
 
     function renderRateBar() {
-        const keys = Object.keys(settings.rates).filter(k=>k!=='TWD');
-        const rateStr = keys.length ? keys.map(k=>`1${k}≈${settings.rates[k].toFixed(2)}`).join(' | ') : '設定匯率';
+        // 優化：只顯示 JPY 和 USD
+        const targetCurrencies = ['JPY', 'USD'];
+        const rateList = [];
+        
+        targetCurrencies.forEach(code => {
+            if(settings.rates[code]) {
+                rateList.push(`1${code}≈${settings.rates[code].toFixed(2)}`);
+            }
+        });
+        
+        const rateStr = rateList.length ? rateList.join(' | ') : '載入匯率中...';
         document.getElementById('rateText').innerHTML = `<div style="font-weight:700">${rateStr}</div><div style="font-size:0.75rem; color:#666; margin-top:3px;">來源: Global API (含1.5%緩衝) | 更新: ${lastUpdateStr}</div>`;
     }
 
