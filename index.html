@@ -410,7 +410,46 @@
     let isShowingOverallTotal = false;
     let lastUpdateStr = localStorage.getItem('lastRateUpdate_Edit') || '尚未更新'; 
 
-    const airportTimezones = { "NRT": 9, "TPE": 8, "KIX": 9, "HKG": 8, "LAX": -8, "CDG": 1 };
+    // --- 機場時區擴充表 (涵蓋: 台、日、韓、中港澳、東南亞、美、歐、紐澳) ---
+    const airportTimezones = {
+        // 台灣 (UTC+8)
+        "TPE": "+8", "TSA": "+8", "KHH": "+8", "RMQ": "+8",
+        // 日本 (UTC+9)
+        "NRT": "+9", "HND": "+9", "KIX": "+9", "FUK": "+9", "CTS": "+9", "OKA": "+9", "NGO": "+9", "SDJ": "+9", "ISG": "+9",
+        // 韓國 (UTC+9)
+        "ICN": "+9", "GMP": "+9", "PUS": "+9", "CJU": "+9",
+        // 港澳中國 (UTC+8)
+        "HKG": "+8", "MFM": "+8", "PEK": "+8", "PVG": "+8", "SHA": "+8", "CAN": "+8",
+        // 東南亞
+        "BKK": "+7", "DMK": "+7", "CNX": "+7", // 泰國
+        "SIN": "+8", // 新加坡
+        "KUL": "+8", "BKI": "+8", "PEN": "+8", // 馬來西亞
+        "SGN": "+7", "HAN": "+7", "DAD": "+7", // 越南
+        "MNL": "+8", "CEB": "+8", // 菲律賓
+        "DPS": "+8", "CGK": "+7", // 印尼
+        // 美國
+        "LAX": "-8", "SFO": "-8", "SEA": "-8", "LAS": "-8", // 美西
+        "JFK": "-5", "EWR": "-5", "LGA": "-5", // 紐約
+        "ORD": "-6", "DFW": "-6", // 中部
+        "HNL": "-10", // 夏威夷
+        "GUM": "+10", // 關島
+        // 歐洲 (預設標準時區，夏令時間需手動調整)
+        "LHR": "+0", "LGW": "+0", // 英國
+        "CDG": "+1", "ORY": "+1", // 法國
+        "FRA": "+1", "MUC": "+1", "BER": "+1", // 德國
+        "FCO": "+1", "MXP": "+1", // 義大利
+        "AMS": "+1", // 荷蘭
+        "VIE": "+1", // 奧地利
+        "PRG": "+1", // 捷克
+        "BCN": "+1", "MAD": "+1", // 西班牙
+        "IST": "+3", // 土耳其
+        "ZRH": "+1", // 瑞士
+        // 紐澳
+        "SYD": "+10", "MEL": "+10", "BNE": "+10",
+        "AKL": "+12", "CHC": "+12",
+        // 其他
+        "DXB": "+4" // 杜拜
+    };
 
     // --- 匯率自動更新邏輯 ---
     async function fetchExchangeData() {
@@ -808,7 +847,7 @@
 
     function autoUpdateTimezone(codeId, zoneId) {
         const c = document.getElementById(codeId).value.toUpperCase();
-        if(airportTimezones[c]) { document.getElementById(zoneId).value = airportTimezones[c]; calcDuration(); }
+        if(airportTimezones[c] !== undefined) { document.getElementById(zoneId).value = airportTimezones[c]; calcDuration(); }
     }
     
     // Save/Data Utils
