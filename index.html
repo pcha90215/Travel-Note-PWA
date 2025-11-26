@@ -239,8 +239,7 @@
         <button class="total-cost-display" id="overallTotalCost" onclick="toggleTotalDisplay()">總計: TWD 0</button>
         <div class="action-btn" onclick="openSettingsModal()">🗓️ 設定</div>
         <div class="action-btn" onclick="openPackingModal()">🎒 清單</div>
-        <div class="action-btn" onclick="triggerImport()">📂 匯入</div>
-        <div class="action-btn" onclick="exportToExcel()">📥 匯出</div>
+        <div class="action-btn" onclick="openDataModal()">📂 資料</div>
         <div class="action-btn" onclick="clearData()">🗑️ 重置</div>
     </div>
 </header>
@@ -384,6 +383,21 @@
 </div>
 
 <div class="modal-overlay" id="packingModalOverlay"><div class="modal"><h2>物品清單</h2><div class="form-row"><input type="text" id="newPackingItemName" class="form-input"><button class="btn btn-primary" onclick="addItemToPackingList()">新增</button></div><div id="packingListContainer" style="margin-top:15px;"></div><button class="btn btn-cancel" onclick="closeModal('packingModalOverlay')">關閉</button></div></div>
+
+<!-- 新增：資料匯入匯出 Modal -->
+<div class="modal-overlay" id="dataModalOverlay">
+    <div class="modal">
+        <h2 style="color:var(--primary)">資料備份 / 還原</h2>
+        <p style="font-size:0.9rem; color:#666; margin-bottom:15px; line-height: 1.5;">您可以將目前的行程匯出成 Excel 檔案進行備份，或是匯入之前的備份檔。</p>
+        
+        <div class="btn-group" style="flex-direction: column; gap: 15px;">
+            <button class="btn btn-outline" onclick="exportToExcel(); closeModal('dataModalOverlay')">📥 匯出行程 (Excel)</button>
+            <button class="btn btn-outline" onclick="triggerImport(); closeModal('dataModalOverlay')">📂 匯入行程 (Excel)</button>
+        </div>
+        
+        <button class="btn btn-cancel" style="margin-top:15px;" onclick="closeModal('dataModalOverlay')">關閉</button>
+    </div>
+</div>
 
 <script>
     // --- PWA Service Worker Registration ---
@@ -988,6 +1002,9 @@
     function addItemToPackingList() { settings.packingList.push({n:document.getElementById('newPackingItemName').value, chk:false}); document.getElementById('newPackingItemName').value=''; saveData(); renderPacking(); }
     function togglePack(idx) { settings.packingList[idx].chk=!settings.packingList[idx].chk; saveData(); }
     function delPack(idx) { settings.packingList.splice(idx,1); saveData(); renderPacking(); }
+
+    // 新增：打開資料備份 Modal
+    function openDataModal() { document.getElementById('dataModalOverlay').classList.add('open'); }
 
     // Init
     document.addEventListener('DOMContentLoaded', () => {
