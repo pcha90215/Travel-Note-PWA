@@ -323,7 +323,7 @@
                 <label class="form-label" style="color:var(--primary);">🛫 出發 (代號/時區/時間)</label>
                 <div class="form-row">
                     <input type="text" class="form-input" id="depCode" placeholder="TPE" style="flex:1; text-transform:uppercase" oninput="autoUpdateTimezone('depCode', 'depZone')">
-                    <select id="depZone" class="zone-select" style="flex:1" onchange="calcDuration()"><option value="8">UTC+8</option><option value="9">UTC+9</option><option value="0">UTC+0</option></select>
+                    <select id="depZone" class="zone-select" style="flex:1" onchange="calcDuration()"><option value="-12">UTC-12</option><option value="-11">UTC-11</option><option value="-10">UTC-10</option><option value="-9">UTC-9</option><option value="-8">UTC-8</option><option value="-7">UTC-7</option><option value="-6">UTC-6</option><option value="-5">UTC-5</option><option value="-4">UTC-4</option><option value="-3">UTC-3</option><option value="-2">UTC-2</option><option value="-1">UTC-1</option><option value="+0">UTC+0</option><option value="+1">UTC+1</option><option value="+2">UTC+2</option><option value="+3">UTC+3</option><option value="+4">UTC+4</option><option value="+5">UTC+5</option><option value="+6">UTC+6</option><option value="+7">UTC+7</option><option value="+8">UTC+8</option><option value="+9">UTC+9</option><option value="+10">UTC+10</option><option value="+11">UTC+11</option><option value="+12">UTC+12</option><option value="+13">UTC+13</option><option value="+14">UTC+14</option></select>
                 </div>
                 <input type="time" class="form-input" id="depTime" style="margin-top:5px;" onchange="calcDuration()">
             </div>
@@ -332,7 +332,7 @@
                 <label class="form-label" style="color:var(--secondary);">🛬 抵達 (代號/時區/時間)</label>
                 <div class="form-row">
                     <input type="text" class="form-input" id="arrCode" placeholder="NRT" style="flex:1; text-transform:uppercase" oninput="autoUpdateTimezone('arrCode', 'arrZone')">
-                    <select id="arrZone" class="zone-select" style="flex:1" onchange="calcDuration()"><option value="9">UTC+9</option><option value="8">UTC+8</option></select>
+                    <select id="arrZone" class="zone-select" style="flex:1" onchange="calcDuration()"><option value="-12">UTC-12</option><option value="-11">UTC-11</option><option value="-10">UTC-10</option><option value="-9">UTC-9</option><option value="-8">UTC-8</option><option value="-7">UTC-7</option><option value="-6">UTC-6</option><option value="-5">UTC-5</option><option value="-4">UTC-4</option><option value="-3">UTC-3</option><option value="-2">UTC-2</option><option value="-1">UTC-1</option><option value="+0">UTC+0</option><option value="+1">UTC+1</option><option value="+2">UTC+2</option><option value="+3">UTC+3</option><option value="+4">UTC+4</option><option value="+5">UTC+5</option><option value="+6">UTC+6</option><option value="+7">UTC+7</option><option value="+8">UTC+8</option><option value="+9">UTC+9</option><option value="+10">UTC+10</option><option value="+11">UTC+11</option><option value="+12">UTC+12</option><option value="+13">UTC+13</option><option value="+14">UTC+14</option></select>
                 </div>
                 <input type="time" class="form-input" id="arrTime" style="margin-top:5px;" onchange="calcDuration()">
             </div>
