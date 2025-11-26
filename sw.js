@@ -1,4 +1,8 @@
-const CACHE_NAME = 'travel-note-v2';
+// --- START OF FILE sw.js ---
+
+// 修改這裡：將 v2 改為 v3，瀏覽器就會知道有新版本，並重新下載 index.html
+const CACHE_NAME = 'travel-note-v5';
+
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -25,6 +29,7 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((keyList) => {
             return Promise.all(keyList.map((key) => {
+                // 清除舊版本的快取 (例如 v2)
                 if (key !== CACHE_NAME) {
                     console.log('[Service Worker] Removing old cache', key);
                     return caches.delete(key);
@@ -32,6 +37,8 @@ self.addEventListener('activate', (event) => {
             }));
         })
     );
+    // 強制讓新版 Service Worker 立即接管頁面
+    return self.clients.claim();
 });
 
 // 攔截請求：優先使用快取，無網路時也能顯示 App
