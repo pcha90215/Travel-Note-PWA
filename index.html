@@ -47,6 +47,7 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
             position: sticky; top: 0; z-index: 100;
             display: flex; justify-content: space-between; align-items: center;
+            flex-shrink: 0;
         }
         .header-title { 
             font-size: 1.2rem; color: var(--primary); font-weight: 700; letter-spacing: 1px; cursor: pointer;
@@ -64,17 +65,28 @@
         }
         .action-btn:hover { color: var(--secondary); }
 
+        /* Layout Wrapper for Responsive Design */
+        .main-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto; /* 讓捲軸出現在這裡 */
+            width: 100%;
+        }
+
         /* Rate Bar */
         .rate-bar {
             background: #FFFBEB; color: var(--text); padding: 10px; 
             font-size: 0.85rem; text-align: center; cursor: pointer; 
             border-bottom: 1px dashed var(--border-color); line-height: 1.4;
+            flex-shrink: 0;
         }
 
         /* Day Tabs */
         .day-tabs {
             display: flex; overflow-x: auto; padding: 15px 25px; gap: 10px;
             scrollbar-width: none; background: var(--bg);
+            flex-shrink: 0;
         }
         .day-tab {
             padding: 8px 16px; background: #FFFFFF; border: 2px solid var(--border-color);
@@ -91,13 +103,14 @@
             margin: 0 25px 15px 25px; background: var(--card-bg); padding: 20px; 
             border-radius: 12px; display: flex; justify-content: space-between; align-items: center;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1); border: 1px solid var(--border-color); 
+            flex-shrink: 0;
         }
         .summary-amount { font-size: 1.8rem; font-weight: 800; color: var(--money); }
         .summary-title { font-size: 0.85rem; color: var(--gray); cursor: pointer; text-decoration: underline dotted; }
 
         /* Timeline & Cards */
         .timeline-container {
-            flex: 1; padding: 10px 25px 80px 25px; overflow-y: auto;
+            padding: 10px 25px 80px 25px; 
             max-width: 600px; margin: 0 auto; width: 100%; box-sizing: border-box;
         }
         .timeline-item {
@@ -228,6 +241,81 @@
 
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slideUpModal { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        /* --- Responsive Desktop Design (>= 768px) --- */
+        @media (min-width: 768px) {
+            body {
+                background-color: #EBE7D5; /* 背景稍微變深，凸顯筆記本 */
+                align-items: center;
+            }
+            header {
+                width: 100%;
+                max-width: 1000px;
+                margin-bottom: 10px;
+                border-radius: 0 0 12px 12px;
+            }
+            /* 重構佈局：Grid 雙欄 */
+            .main-wrapper {
+                display: grid;
+                grid-template-columns: 320px 1fr; /* 左側儀表板 | 右側行程 */
+                gap: 25px;
+                max-width: 1000px;
+                width: 100%;
+                padding: 0 20px 20px 20px;
+                box-sizing: border-box;
+                align-items: start;
+                overflow-y: visible; /* 外層不捲動，讓內容自適應 */
+            }
+
+            /* 左側：儀表板容器 */
+            .dashboard-sidebar {
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+                position: sticky;
+                top: 90px; /* 讓它隨捲動固定 */
+            }
+
+            /* 元件樣式覆寫 - 適應側邊欄 */
+            .rate-bar {
+                border-radius: 10px;
+                border: 1px solid var(--border-color);
+            }
+            .day-tabs {
+                flex-wrap: wrap; /* 改為多行顯示，不需橫向捲動 */
+                justify-content: flex-start;
+                padding: 0;
+                background: transparent;
+            }
+            .day-tab {
+                margin-bottom: 5px;
+                flex: 0 0 auto;
+            }
+            .summary-box {
+                margin: 0; /* 移除 margin，適應 Grid 格子 */
+            }
+
+            /* 右側：行程內容 */
+            .timeline-container {
+                max-width: none; /* 解除手機版寬度限制 */
+                padding: 0;
+                margin: 0;
+                overflow-y: visible;
+            }
+
+            /* FAB 按鈕位置調整 */
+            .fab {
+                right: calc((100vw - 1000px) / 2 + 40px); /* 保持在內容區域右下角 */
+            }
+        }
+
+        /* 超大螢幕 FAB 微調 */
+        @media (min-width: 1080px) {
+            .fab {
+                right: 50%;
+                margin-right: -460px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -243,22 +331,31 @@
     </div>
 </header>
 
-<div class="rate-bar" id="rateBar" onclick="openRateModal()">
-    <div id="rateText">載入匯率中...</div>
-</div>
-
-<div class="day-tabs" id="dayTabs"></div>
-
-<div class="summary-box">
-    <div>
-        <div style="font-size:0.8rem; color:var(--gray); margin-bottom:4px;">
-            Day <span id="currentDayNum">1</span> <span id="dateDisplayInSummary"></span>
+<!-- 響應式佈局容器 -->
+<div class="main-wrapper">
+    
+    <!-- 左側儀表板 (電腦版顯示於左側，手機版顯示於上方) -->
+    <div class="dashboard-sidebar">
+        <div class="rate-bar" id="rateBar" onclick="openRateModal()">
+            <div id="rateText">載入匯率中...</div>
         </div>
-        <div class="summary-amount" id="dayTotal">TWD 0</div>
-    </div>
-</div>
 
-<div class="timeline-container" id="timelineContainer"></div>
+        <div class="summary-box">
+            <div>
+                <div style="font-size:0.8rem; color:var(--gray); margin-bottom:4px;">
+                    Day <span id="currentDayNum">1</span> <span id="dateDisplayInSummary"></span>
+                </div>
+                <div class="summary-amount" id="dayTotal">TWD 0</div>
+            </div>
+        </div>
+
+        <div class="day-tabs" id="dayTabs"></div>
+    </div>
+
+    <!-- 右側行程內容 -->
+    <div class="timeline-container" id="timelineContainer"></div>
+
+</div>
 
 <button class="fab" onclick="openModal()">+</button>
 
@@ -584,7 +681,6 @@
                             const dayStr = row["Day"] || "Day 1";
                             const dayNum = parseInt(dayStr.replace("Day ", "")) || 1;
 
-                            // 新增：嘗試從 Excel 的 Day 1 抓取日期來自動設定旅程開始日
                             if (dayNum === 1 && row["日期"] && !foundStartDate) {
                                 foundStartDate = row["日期"];
                             }
@@ -633,12 +729,8 @@
                         });
 
                         days = newDays;
-                        // 如果有抓到日期，自動更新設定
-                        if (foundStartDate) {
-                            // 簡單驗證日期格式 (YYYY-MM-DD)
-                            if (/^\d{4}-\d{2}-\d{2}$/.test(foundStartDate)) {
-                                settings.startDate = foundStartDate;
-                            }
+                        if (foundStartDate && /^\d{4}-\d{2}-\d{2}$/.test(foundStartDate)) {
+                            settings.startDate = foundStartDate;
                         }
                     }
 
@@ -670,7 +762,6 @@
     function exportToExcel() {
         if (!confirm("確定要匯出行程表為 Excel 嗎？")) return;
 
-        // 修改：新增 "日期" 欄位
         const header = ["Day", "日期", "時間", "類型", "項目名稱", "詳細資訊/地點", "原始金額", "幣別", "匯率", "台幣(預估)", "備註"];
         const data = [header];
 
@@ -682,7 +773,6 @@
 
             items.sort((a,b) => (a.time||a.depTime||'00:00').localeCompare(b.time||b.depTime||'00:00'));
 
-            // 新增：計算該日的日期
             let dateStr = "";
             if (settings.startDate) {
                 const d = new Date(settings.startDate);
@@ -717,7 +807,7 @@
 
                 data.push([
                     `Day ${dayNum}`,
-                    dateStr, // 填入日期
+                    dateStr,
                     timeStr,
                     typeName,
                     item.title || item.flightCode || item.transportMode || '',
@@ -732,7 +822,6 @@
         });
 
         const ws = XLSX.utils.aoa_to_sheet(data);
-        // 修改：調整欄位寬度以適應新增的日期欄
         ws['!cols'] = [
             { wch: 6 }, { wch: 12 }, { wch: 12 }, { wch: 6 }, { wch: 20 }, { wch: 30 },
             { wch: 10 }, { wch: 6 }, { wch: 8 }, { wch: 10 }, { wch: 30 }

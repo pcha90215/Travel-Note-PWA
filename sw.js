@@ -1,7 +1,7 @@
 // --- START OF FILE sw.js ---
 
 // 修改這裡：將 v2 改為 v3，瀏覽器就會知道有新版本，並重新下載 index.html
-const CACHE_NAME = 'travel-note-v6';
+const CACHE_NAME = 'travel-note-v7';
 
 const ASSETS_TO_CACHE = [
     './',
