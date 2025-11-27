@@ -47,16 +47,17 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
             position: sticky; top: 0; z-index: 100;
             display: flex; justify-content: space-between; align-items: center;
+            flex-shrink: 0; /* 防止 Header 被壓縮 */
         }
         .header-title { 
-            font-size: 1.2rem; color: var(--primary); font-weight: 700; letter-spacing: 1px; cursor: pointer;
+            font-size: 1.2rem; color: var(--primary); font-weight: 700; letter-spacing: 1px; 
+            /* 移除點擊手勢 */
         }
         .header-controls { display: flex; gap: 15px; align-items: center; }
         
         .total-cost-display {
             font-size: 0.95rem; font-weight: 600; color: var(--money);
-            border: none; background: transparent; cursor: pointer;
-            text-decoration: underline 2px dotted var(--money);
+            border: none; background: transparent; 
         }
         
         .action-btn { 
@@ -70,12 +71,14 @@
             background: #FFFBEB; color: var(--text); padding: 10px; 
             font-size: 0.85rem; text-align: center; cursor: pointer; 
             border-bottom: 1px dashed var(--border-color); line-height: 1.4;
+            flex-shrink: 0;
         }
 
         /* Day Tabs */
         .day-tabs {
             display: flex; overflow-x: auto; padding: 15px 25px; gap: 10px;
             scrollbar-width: none; background: var(--bg);
+            flex-shrink: 0;
         }
         .day-tab {
             padding: 8px 16px; background: #FFFFFF; border: 2px solid var(--border-color);
@@ -92,13 +95,16 @@
             margin: 0 25px 15px 25px; background: var(--card-bg); padding: 20px; 
             border-radius: 12px; display: flex; justify-content: space-between; align-items: center;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1); border: 1px solid var(--border-color); 
+            flex-shrink: 0;
         }
         .summary-amount { font-size: 1.8rem; font-weight: 800; color: var(--money); }
         .summary-title { font-size: 0.85rem; color: var(--gray); cursor: pointer; text-decoration: underline dotted; }
 
         /* Timeline & Cards */
         .timeline-container {
-            flex: 1; padding: 10px 25px 80px 25px; overflow-y: auto;
+            flex: 1; /* 佔據剩餘空間 */
+            padding: 10px 25px 80px 25px; 
+            overflow-y: auto; /* 捲軸只出現在這裡 */
             max-width: 600px; margin: 0 auto; width: 100%; box-sizing: border-box;
         }
         .timeline-item {
@@ -234,9 +240,9 @@
 <body>
 
 <header>
-    <div class="header-title" id="headerTitle" onclick="openSettingsModal()">TRAVEL NOTE ✎</div>
+    <div class="header-title" id="headerTitle">TRAVEL NOTE</div>
     <div class="header-controls">
-        <button class="total-cost-display" id="overallTotalCost" onclick="toggleTotalDisplay()">總計: TWD 0</button>
+        <div class="total-cost-display" id="overallTotalCost">總計: TWD 0</div>
         <div class="action-btn" onclick="openSettingsModal()">🗓️ 設定</div>
         <div class="action-btn" onclick="openPackingModal()">🎒 清單</div>
         <div class="action-btn" onclick="openDataModal()">📂 資料</div>
@@ -256,9 +262,6 @@
             Day <span id="currentDayNum">1</span> <span id="dateDisplayInSummary"></span>
         </div>
         <div class="summary-amount" id="dayTotal">TWD 0</div>
-    </div>
-    <div style="text-align: right;">
-        <div class="summary-title" id="dayTotalConverted" onclick="toggleTotalDisplay()">總花費</div>
     </div>
 </div>
 
@@ -431,7 +434,7 @@
     // Data
     let days = JSON.parse(localStorage.getItem('tripData_Edit')) || { 1: [] };
     
-    // 初始化設定，並確保新舊用戶都擁有完整的貨幣列表以便自動更新
+    // 初始化設定
     let settings = JSON.parse(localStorage.getItem('tripSettings_Edit')) || { 
         rates: { 'JPY': 0.21, 'USD': 30.5, 'EUR': 32.5, 'TWD': 1.0 }, 
         startDate: '',
@@ -449,7 +452,6 @@
 
     let currentDay = 1;
     let editingItemId = null; 
-    let isShowingOverallTotal = false;
     let lastUpdateStr = localStorage.getItem('lastRateUpdate_Edit') || '尚未更新'; 
 
     // --- 機場時區擴充表 ---
@@ -577,26 +579,27 @@
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
 
-                    // 1. 讀取行程明細
                     const sheetName = "行程明細";
                     const worksheet = workbook.Sheets[sheetName];
                     if (worksheet) {
                         const jsonData = XLSX.utils.sheet_to_json(worksheet);
                         
                         const newDays = {};
+                        let foundStartDate = null;
                         
                         jsonData.forEach(row => {
-                            // 解析 Day
                             const dayStr = row["Day"] || "Day 1";
                             const dayNum = parseInt(dayStr.replace("Day ", "")) || 1;
 
+                            if (dayNum === 1 && row["日期"] && !foundStartDate) {
+                                foundStartDate = row["日期"];
+                            }
+
                             if (!newDays[dayNum]) newDays[dayNum] = [];
 
-                            // 對應類型
                             const typeMap = { '景點':'spot', '美食':'food', '交通':'transport', '購物':'shopping', '航班':'flight' };
                             const type = typeMap[row["類型"]] || 'spot';
 
-                            // 解析時間 (若是 "09:00 - 10:00" 則分割)
                             let time = row["時間"] || "";
                             let depTime = time;
                             let arrTime = "";
@@ -615,19 +618,17 @@
                                 notes: row["備註"] || ""
                             };
 
-                            // 還原特殊欄位 (盡力還原，因為匯出時已格式化)
                             if (type === 'flight') {
                                 item.depTime = depTime;
                                 item.arrTime = arrTime;
                                 item.flightCode = item.title;
-                                // 預設值，因為 Excel 沒存這麽細
                                 item.depCode = ""; item.arrCode = ""; 
                                 item.depZone = 8; item.arrZone = 8;
                             } else if (type === 'transport') {
                                 item.depTime = depTime;
                                 item.arrTime = arrTime;
                                 item.transportMode = item.title;
-                                item.transportDepLoc = ""; // 無法從合併欄位精確還原
+                                item.transportDepLoc = ""; 
                                 item.transportArrLoc = "";
                             } else {
                                 item.time = depTime;
@@ -638,9 +639,11 @@
                         });
 
                         days = newDays;
+                        if (foundStartDate && /^\d{4}-\d{2}-\d{2}$/.test(foundStartDate)) {
+                            settings.startDate = foundStartDate;
+                        }
                     }
 
-                    // 2. 讀取打包清單 (如果存在)
                     const packSheet = workbook.Sheets["打包清單"];
                     if (packSheet) {
                         const packData = XLSX.utils.sheet_to_json(packSheet);
@@ -662,7 +665,6 @@
             reader.readAsArrayBuffer(file);
         });
         
-        // 重置 input 以便重複選取同一檔案
         event.target.value = '';
     }
 
@@ -670,19 +672,26 @@
     function exportToExcel() {
         if (!confirm("確定要匯出行程表為 Excel 嗎？")) return;
 
-        // 1. 準備 Excel 的標題列
-        const header = ["Day", "時間", "類型", "項目名稱", "詳細資訊/地點", "原始金額", "幣別", "匯率", "台幣(預估)", "備註"];
+        const header = ["Day", "日期", "時間", "類型", "項目名稱", "詳細資訊/地點", "原始金額", "幣別", "匯率", "台幣(預估)", "備註"];
         const data = [header];
 
-        // 2. 遍歷每一天的資料
         const sortedDays = Object.keys(days).map(Number).sort((a,b)=>a-b);
         
         sortedDays.forEach(dayNum => {
             const items = days[dayNum];
             if (!items || items.length === 0) return;
 
-            // 依時間排序
             items.sort((a,b) => (a.time||a.depTime||'00:00').localeCompare(b.time||b.depTime||'00:00'));
+
+            let dateStr = "";
+            if (settings.startDate) {
+                const d = new Date(settings.startDate);
+                d.setDate(d.getDate() + (dayNum - 1));
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                dateStr = `${y}-${m}-${dd}`;
+            }
 
             items.forEach(item => {
                 let details = "";
@@ -708,6 +717,7 @@
 
                 data.push([
                     `Day ${dayNum}`,
+                    dateStr,
                     timeStr,
                     typeName,
                     item.title || item.flightCode || item.transportMode || '',
@@ -721,18 +731,15 @@
             });
         });
 
-        // 3. 建立 Worksheet
         const ws = XLSX.utils.aoa_to_sheet(data);
         ws['!cols'] = [
-            { wch: 6 }, { wch: 12 }, { wch: 6 }, { wch: 20 }, { wch: 30 },
+            { wch: 6 }, { wch: 12 }, { wch: 12 }, { wch: 6 }, { wch: 20 }, { wch: 30 },
             { wch: 10 }, { wch: 6 }, { wch: 8 }, { wch: 10 }, { wch: 30 }
         ];
 
-        // 4. 建立 Workbook
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "行程明細");
 
-        // 如果有打包清單，也加一個分頁
         if (settings.packingList && settings.packingList.length > 0) {
             const packData = [["狀態", "物品名稱"]];
             settings.packingList.forEach(p => {
@@ -742,14 +749,13 @@
             XLSX.utils.book_append_sheet(wb, wsPack, "打包清單");
         }
 
-        // 5. 匯出
         const fileName = `${settings.tripName || 'Travel_Note'}.xlsx`;
         XLSX.writeFile(wb, fileName);
     }
 
     // --- Rendering Logic ---
     function renderUI() {
-        document.getElementById('headerTitle').innerText = (settings.tripName || 'TRAVEL NOTE') + ' ✎';
+        document.getElementById('headerTitle').innerText = (settings.tripName || 'TRAVEL NOTE');
         document.getElementById('overallTotalCost').innerText = `總計: TWD ${calcTotal()}`;
         renderRateBar();
         renderTabs();
@@ -757,16 +763,13 @@
     }
 
     function renderRateBar() {
-        // 優化：只顯示 JPY 和 USD
         const targetCurrencies = ['JPY', 'USD'];
         const rateList = [];
-        
         targetCurrencies.forEach(code => {
             if(settings.rates[code]) {
                 rateList.push(`1${code}≈${settings.rates[code].toFixed(2)}`);
             }
         });
-        
         const rateStr = rateList.length ? rateList.join(' | ') : '載入匯率中...';
         document.getElementById('rateText').innerHTML = `<div style="font-weight:700">${rateStr}</div><div style="font-size:0.75rem; color:#666; margin-top:3px;">來源: Global API (含1.5%緩衝) | 更新: ${lastUpdateStr}</div>`;
     }
@@ -785,8 +788,8 @@
         const items = days[currentDay] || [];
         let dayTotal = 0;
         items.forEach(i => dayTotal += (i.cost||0) * (settings.rates[i.currency||'TWD']||1));
-        document.getElementById('dayTotal').innerText = isShowingOverallTotal ? `TWD ${calcTotal()}` : `TWD ${Math.round(dayTotal).toLocaleString()}`;
-        document.getElementById('dayTotalConverted').innerText = isShowingOverallTotal ? '切換回單日' : '總花費';
+        
+        document.getElementById('dayTotal').innerText = `TWD ${Math.round(dayTotal).toLocaleString()}`;
 
         items.sort((a,b) => (a.time||a.depTime||'00:00').localeCompare(b.time||b.depTime||'00:00'));
 
@@ -965,7 +968,6 @@
     function closeModal(id) { document.getElementById(id).classList.remove('open'); editingItemId=null; }
     function deleteItem(id) { openConfirm('刪除此行程？', ()=>{ days[currentDay]=days[currentDay].filter(i=>i.id!==id); saveData(); renderUI(); }); }
     function calcTotal() { let t=0; Object.values(days).flat().forEach(i=>t+=(i.cost||0)*(settings.rates[i.currency]||1)); return Math.round(t).toLocaleString(); }
-    function toggleTotalDisplay() { isShowingOverallTotal = !isShowingOverallTotal; renderTimeline(); }
     
     function toggleFields() {
         const t = document.getElementById('inputType').value;
@@ -1007,7 +1009,7 @@
         const max = keys.length?Math.max(...keys):1;
         for(let i=1;i<=max;i++) {
             const d=document.createElement('div'); d.className=`day-tab ${i===currentDay?'active':''}`; d.innerText=`Day ${i}`;
-            d.onclick=()=>{currentDay=i;isShowingOverallTotal=false;renderUI();}; c.appendChild(d);
+            d.onclick=()=>{currentDay=i;renderUI();}; c.appendChild(d);
         }
         const add=document.createElement('div'); add.className='day-tab'; add.innerText='+';
         add.onclick=()=>{days[max+1]=[]; saveData(); currentDay=max+1; renderUI();}; c.appendChild(add);
