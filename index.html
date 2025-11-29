@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -127,6 +126,18 @@
             cursor: pointer; z-index: 101; border-radius: 50%; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             display: flex; justify-content: center; align-items: center;
         }
+        /* 新增：左下角版本號樣式 */
+        .version-info {
+            position: fixed;
+            bottom: calc(10px + env(safe-area-inset-bottom));
+            left: 15px;
+            font-size: 0.75rem;
+            color: var(--gray);
+            opacity: 0.6;
+            z-index: 99;
+            pointer-events: none; /* 確保不阻擋點擊 */
+            font-weight: 600;
+        }
         .modal-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.4); display: none; z-index: 200;
@@ -202,6 +213,9 @@
 </div>
 
 <div class="timeline-container" id="timelineContainer"></div>
+
+<!-- 左下角版本號 -->
+<div class="version-info">v9.0</div>
 
 <button class="fab" onclick="openModal()">+</button>
 <input type="file" id="importFile" accept=".xlsx, .xls" style="display: none;" onchange="importFromExcel(event)">
