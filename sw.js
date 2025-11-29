@@ -1,15 +1,19 @@
-// --- START OF FILE sw.js ---
+--- START OF FILE sw.js ---
 
-// 版本號更新為 v6 (代表經過優化)
-const CACHE_NAME = 'travel-note-v6';
+// 版本號更新為 v9 (優化快取策略與穩定性)
+const CACHE_NAME = 'travel-note-v9';
 
-const ASSETS_TO_CACHE = [
+// 核心檔案：必須下載成功才能安裝 Service Worker
+const CORE_ASSETS = [
     './',
     './index.html',
     './manifest.json',
     './icon-192.png',
-    './icon-512.png',
-    // 即使前端改為懶加載，這裡仍須保留，讓 SW 在背景預先下載，確保離線時也能匯出
+    './icon-512.png'
+];
+
+// 外部依賴：如果下載失敗，不應阻止 App 運作
+const OPTIONAL_ASSETS = [
     'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js'
 ];
 
@@ -17,8 +21,11 @@ self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then((cache) => {
-                console.log('[Service Worker] Caching all assets');
-                return cache.addAll(ASSETS_TO_CACHE);
+                console.log('[Service Worker] Caching assets');
+                // 嘗試快取外部依賴，失敗只會發出警告，不會中斷安裝
+                cache.addAll(OPTIONAL_ASSETS).catch(err => console.warn('[SW] Optional assets failed:', err));
+                // 核心檔案必須成功
+                return cache.addAll(CORE_ASSETS);
             })
     );
 });
