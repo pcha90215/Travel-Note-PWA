@@ -215,7 +215,7 @@
 <div class="timeline-container" id="timelineContainer"></div>
 
 <!-- 左下角版本號 -->
-<div class="version-info">v9.0</div>
+<div class="version-info">v9.1</div>
 
 <button class="fab" onclick="openModal()">+</button>
 <input type="file" id="importFile" accept=".xlsx, .xls" style="display: none;" onchange="importFromExcel(event)">
@@ -509,6 +509,11 @@
                         let foundStartDate = null;
                         
                         jsonData.forEach(row => {
+                            // [新增] 檢查是否為「總計列」，如果是則跳過不處理
+                            const sysData = row["SYSTEM_DATA (Do Not Edit)"];
+                            if (sysData && sysData.includes('"ignore":true')) return;
+                            if (row["項目名稱"] === "💰 總計預估花費") return;
+
                             const dayStr = row["Day"] || "Day 1";
                             const dayNum = parseInt(dayStr.replace("Day ", "")) || 1;
                             if (dayNum === 1 && row["日期"] && !foundStartDate) foundStartDate = row["日期"];
@@ -628,6 +633,8 @@
         const data = [header];
         const sortedDays = Object.keys(days).map(Number).sort((a,b)=>a-b);
         
+        let grandTotal = 0; // 新增：總金額計算
+
         sortedDays.forEach(dayNum => {
             const items = days[dayNum];
             if (!items || items.length === 0) return;
@@ -653,6 +660,10 @@
 
                 const currency = item.currency || 'TWD', rate = settings.rates[currency] || 1;
                 const cost = item.cost || 0, costTWD = Math.round(cost * rate);
+                
+                // 累加總金額
+                if(cost > 0) grandTotal += costTWD;
+
                 const typeNameMap = { 'spot':'景點', 'food':'美食', 'transport':'交通', 'shopping':'購物', 'flight':'航班' };
 
                 data.push([
@@ -665,6 +676,11 @@
                 ]);
             });
         });
+
+        // 新增：最後插入一行總計欄位
+        data.push([
+            "", "", "", "", "💰 總計預估花費", "", "", "", "", grandTotal, "", JSON.stringify({ignore: true})
+        ]);
 
         const ws = XLSX.utils.aoa_to_sheet(data);
         // 設定欄寬，最後一欄隱藏

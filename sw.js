@@ -1,6 +1,6 @@
 --- START OF FILE sw.js ---
 
-// 版本號更新為 v9 (優化快取策略與穩定性)
+// 版本號更新為 v10 (優化快取策略與穩定性)
 const CACHE_NAME = 'travel-note-v9';
 
 // 核心檔案：必須下載成功才能安裝 Service Worker
